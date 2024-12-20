@@ -8,6 +8,7 @@ import moondream as md
 from PIL import Image
 import json
 import logging
+from rapidfuzz import fuzz
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO,
@@ -110,12 +111,19 @@ def main():
         print("Search the video using a word:")
         search_word = input().strip().lower()
 
-        matching_scenes = [scene for scene, caption in scene_captions.items()
-                           if search_word in caption.lower()]
+        matching_scenes = []
+        for scene, caption in scene_captions.items():
+            similarity = fuzz.partial_ratio(search_word, caption.lower())
+            if similarity > 70:
+                matching_scenes.append((scene, similarity))
+
+        matching_scenes.sort(key=lambda x: x[1], reverse=True)  
 
         if matching_scenes:
+            logging.info(f"Found {len(matching_scenes)} matching scenes.")
+            print("Scenes containing the word (sorted by relevance):\n")
             scene_images = []
-            for scene in matching_scenes:
+            for scene, similarity in matching_scenes:
                 image_path = f"{output_path}/{scene}.png"
                 if os.path.exists(image_path):
                     try:

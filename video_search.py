@@ -9,6 +9,8 @@ from PIL import Image
 import json
 import logging
 from rapidfuzz import fuzz
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import WordCompleter
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO,
@@ -107,9 +109,18 @@ def main():
     if os.path.exists(captions_file):
         with open(captions_file, 'r') as json_file:
             scene_captions = json.load(json_file)
+            logging.info("Loaded scene captions from JSON file.")
+
+        # Extract unique words from captions for auto-completion
+        unique_words = set()
+        for caption in scene_captions.values():
+            unique_words.update(caption.lower().split())
+
+        completer = WordCompleter(list(unique_words), ignore_case=True)
 
         print("Search the video using a word:")
-        search_word = input().strip().lower()
+        search_word = prompt("Enter search term: ",
+                             completer=completer).strip().lower()
 
         matching_scenes = []
         for scene, caption in scene_captions.items():
@@ -117,7 +128,7 @@ def main():
             if similarity > 70:
                 matching_scenes.append((scene, similarity))
 
-        matching_scenes.sort(key=lambda x: x[1], reverse=True)  
+        matching_scenes.sort(key=lambda x: x[1], reverse=True)
 
         if matching_scenes:
             logging.info(f"Found {len(matching_scenes)} matching scenes.")

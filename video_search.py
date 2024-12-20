@@ -7,6 +7,11 @@ from scenedetect.detectors import ContentDetector
 import moondream as md
 from PIL import Image
 import json
+import logging
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Initialize the Moondream2 model
 model = md.vl(model="./moondream-2b-int8.mf")
@@ -23,6 +28,7 @@ def main():
         # Ensure output directory for scene frames exists
         if not os.path.exists(output_path):
             os.makedirs(output_path)
+            logging.info("Created output directory for scene frames.")
 
         # Search for a "Super Mario movie trailer" on YouTube and download it.
         ydl_opts = {
@@ -33,9 +39,10 @@ def main():
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                logging.info("Downloading video...")
                 ydl.download(['ytsearch:super mario movie trailer'])
         except Exception as e:
-            print(f"Failed to download video: {e}")
+            logging.error(f"Failed to download video: {e}")
             return
 
         # Set up pyscenedetect to detect scenes
@@ -46,11 +53,13 @@ def main():
         try:
             video_manager.set_downscale_factor()
             video_manager.start()
+            logging.info("Detecting scenes...")
             scene_manager.detect_scenes(frame_source=video_manager)
         finally:
             video_manager.release()
 
         scene_list = scene_manager.get_scene_list()
+        logging.info(f"Detected {len(scene_list)} scenes.")
 
         # Function to save a frame at the specified number
         def save_frame(frame_number, output_path):
@@ -61,8 +70,9 @@ def main():
             if success:
                 frame_path = f"{output_path}/scene_{frame_number}.png"
                 cv2.imwrite(frame_path, image)
+                logging.info(f"Saved frame {frame_number} as {frame_path}.")
             else:
-                print(f"Failed to capture frame at {frame_number}")
+                logging.warning(f"Failed to capture frame at {frame_number}.")
             video_cap.release()
             return frame_path
 
@@ -85,10 +95,12 @@ def main():
                 caption = model.caption(image)["caption"]
                 # Store the caption with the scene number
                 scene_captions[f"scene_{start_frame}"] = caption
+                logging.info(f"Generated caption for frame {start_frame}.")
 
         # Save the scene captions to a JSON file
         with open(captions_file, 'w') as json_file:
             json.dump(scene_captions, json_file, indent=4)
+            logging.info("Saved scene captions to JSON file.")
 
     # Functionality to search scenes by a word
     if os.path.exists(captions_file):
@@ -102,16 +114,15 @@ def main():
                            if search_word in caption.lower()]
 
         if matching_scenes:
-            print("Scenes containing the word:\n")
             scene_images = []
             for scene in matching_scenes:
-                print(f"{scene}: {scene_captions[scene]}")
                 image_path = f"{output_path}/{scene}.png"
                 if os.path.exists(image_path):
                     try:
                         scene_images.append(Image.open(image_path))
+                        logging.info(f"Loaded image {image_path}.")
                     except Exception as e:
-                        print(f"Error loading image {image_path}: {e}")
+                        logging.error(f"Error loading image {image_path}: {e}")
 
             if scene_images:
                 # Create a collage of all matching scene images
@@ -129,14 +140,14 @@ def main():
 
                     # Save and display the collage
                     collage.save('collage.png')
-                    print("Collage saved as 'collage.png'")
+                    logging.info("Collage saved as 'collage.png'.")
                     collage.show()
                 except Exception as e:
-                    print(f"Error creating collage: {e}")
+                    logging.error(f"Error creating collage: {e}")
             else:
-                print("No images available for matching scenes.")
+                logging.warning("No images available for matching scenes.")
         else:
-            print("No scenes found containing the word.")
+            logging.info("No scenes found containing the word.")
 
 
 if __name__ == "__main__":

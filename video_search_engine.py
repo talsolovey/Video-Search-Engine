@@ -1,14 +1,17 @@
 # video_search_engine.py
 import os
 import logging
-import moondream as md
 from video_downloader import download_video
-from video_processing import (
+from image_model_processor import (
     detect_and_save_scene_frames,
     generate_captions,
     load_captions,
     search_with_autocomplete,
     create_collage
+)
+from video_model_processor import (
+    initialize_gemini,
+    process_with_video_model
 )
 
 # Initialize logging
@@ -41,18 +44,18 @@ def main():
                 os.makedirs(SCENE_DIR)
                 logging.info("Created output directory for scene frames.")
             
-            # download video if not already downloaded
-            if not os.path.exists(VIDEO_PATH):
-                video_file = download_video(VIDEO_PATH)
-                if not video_file:
-                    logging.error("Failed to download video. Exiting.")
-                    return
+                # download video if not already downloaded
+                if not os.path.exists(VIDEO_PATH):
+                    video_file = download_video(VIDEO_PATH)
+                    if not video_file:
+                        logging.error("Failed to download video. Exiting.")
+                        return
         
-            # Detect scenes and save frames
-            scene_list = detect_and_save_scene_frames(VIDEO_PATH, SCENE_DIR)
-            if not scene_list:
-                logging.error("Failed to detect scenes. Exiting.")   
-                return
+                # Detect scenes and save frames
+                scene_list = detect_and_save_scene_frames(VIDEO_PATH, SCENE_DIR)
+                if not scene_list:
+                    logging.error("Failed to detect scenes. Exiting.")   
+                    return
             
             # Initialize the Moondream2 model
             logging.info("Initializing Moondream2 model...")
@@ -64,7 +67,7 @@ def main():
             logging.info("Moondream2 model initialized.")
 
             # Generate captions for the scenes
-            scene_captions = generate_captions(SCENE_DIR, CAPTIONS_FILE, md)
+            scene_captions = generate_captions(SCENE_DIR, CAPTIONS_FILE, model)
         
         # Load scene captions from file
         scene_captions = load_captions(CAPTIONS_FILE)
@@ -79,7 +82,19 @@ def main():
         if not os.path.exists('collage.png'):
             logging.warning("No collage created. Exiting.")
             return
-            
+    elif mode == '2':
+        # Initialize the Gemini API
+        try:
+            model = initialize_gemini()
+        except Exception as e:
+            logging.error(f"Failed to initialize Gemini model: {e}. Exiting.")
+            return
+        
+        # Prompt user for search query
+        user_query = input("Using a video model. What would you like me to find in the video? ").strip()
+
+        # Process video with Gemini model
+        process_with_video_model(model, VIDEO_PATH, user_query, COLLAGE_PATH)
 
 if __name__ == "__main__":
     main()

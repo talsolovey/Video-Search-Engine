@@ -5,13 +5,11 @@ import google.generativeai as genai
 from PIL import Image
 import time
 import cv2
-import re
 from PIL import Image
-import numpy as np
 import json
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def initialize_gemini():
     """

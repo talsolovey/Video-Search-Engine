@@ -1,6 +1,7 @@
 # video_processing.py
 import os
 import cv2
+import moondream as md
 from scenedetect import VideoManager
 from scenedetect import SceneManager
 from scenedetect.detectors import ContentDetector
@@ -12,9 +13,57 @@ from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Initialize the Moondream2 model
+def initialize_moondream_model():
+    logging.info("Initializing Moondream2 model...")
+    try:
+        model = md.vl(model="./moondream-2b-int8.mf")
+    except Exception as e:
+        logging.error(f"Failed to initialize Moondream2 model: {e}. Exiting.")
+        return
+    logging.info("Moondream2 model initialized.")
+    return model
+
+def process_with_image_model(model, captions_file, scene_dir, collage_path, video_path):
+    """
+    Process the video frames using the image model.
+    """
+    # If captions file exists, skip download, creation of image, and captioning
+    if not os.path.exists(captions_file):
+        # Ensure output directory for scene frames exists
+        if not os.path.exists(scene_dir):
+            os.makedirs(scene_dir)
+            logging.info("Created output directory for scene frames.")
+        
+            # Detect scenes and save frames
+            scene_list = detect_and_save_scene_frames(video_path, scene_dir)
+            if not scene_list:
+                logging.error("Failed to detect scenes. Exiting.")   
+                return
+
+        # Generate captions for the scenes
+        scene_captions = generate_captions(scene_dir, captions_file, model)
+        
+    # Load scene captions from file
+    scene_captions = load_captions(captions_file)
+    if not scene_captions:
+        logging.error("Failed to load scene captions. Exiting.")
+        return
+    matching_scenes = search_with_autocomplete(scene_captions)
+    if not matching_scenes:
+        logging.warning("No matching scenes found. Exiting.")
+        return
+    create_collage(matching_scenes, scene_dir, collage_path)
+    if not os.path.exists('collage.png'):
+        logging.warning("No collage created. Exiting.")
+        return
 
 def detect_and_save_scene_frames(video_path, output_path):
+    """
+    Detects scenes in the video and saves the frames at the start of each scene.
+    """
     # Set up pyscenedetect to detect scenes
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -49,15 +98,19 @@ def detect_and_save_scene_frames(video_path, output_path):
     # Save the frame at the start of each scene
     for i, scene in enumerate(scene_list):
         start_frame = scene[0].frame_num  # Start frame of the scene
-        save_frame(start_frame, output_path)
+        save_frame(i, start_frame, output_path)
 
     return scene_list
 
 def generate_captions(scene_dir, captions_file, model):
+    """
+    Generates captions for the scene images using the image model.
+    """
     # Dictionary to hold scene captions
     scene_captions = {}
 
-    scene_files = set(os.listdir(scene_dir))
+    scene_files = os.listdir(scene_dir)
+    scene_files = [f for f in scene_files if f.endswith('.png')]
 
     logging.info("Generating captions for each scene...")
     for scene_file in scene_files:
@@ -109,11 +162,8 @@ def search_with_autocomplete(scene_captions):
     for scene, caption in scene_captions.items():
         similarity = fuzz.partial_ratio(search_word, caption.lower())
         if similarity > 70:
-            matching_scenes.append((scene, similarity))
+            matching_scenes.append(scene)
             
-            # Sort matching scenes by similarity in descending order
-            matching_scenes.sort(key=lambda x: x[1], reverse=True)
-
     logging.info(f"Found {len(matching_scenes)} matching scenes for the term '{search_word}'.")
     return matching_scenes
 
@@ -127,7 +177,7 @@ def create_collage(scene_images, scene_dir, collage_file):
         return
     
     images = []
-    for scene, similarity in scene_images:
+    for scene in scene_images:
         image_path = os.path.join(scene_dir, f"{scene}.png")
         if os.path.exists(image_path):
             try:
